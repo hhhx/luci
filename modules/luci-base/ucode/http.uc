@@ -29,7 +29,7 @@ export let HTTP_MAX_CONTENT = 1024*100;		// 100 kB maximum content size
 //  o Boolean which indicates whether the current chunk is the last one (eof)
 export function mimedecode_message_body(src, msg, file_cb) {
 	let len = 0, maxlen = +msg.env.CONTENT_LENGTH;
-	let header, field, parser;
+	let err, header, field, parser;
 
 	parser = multipart_parser(msg.env.CONTENT_TYPE, function(what, buffer, length) {
 		if (what == parser.PART_INIT) {
@@ -430,7 +430,7 @@ const Class = {
 		for (let name, value in this.message.params) {
 			while (value?.fd) {
 				let data = value.fd.read(1024);
-				let eof = (data == null || data == '');
+				let eof = (length(data) == 0);
 
 				this.filehandler(value, data, eof);
 
@@ -524,7 +524,7 @@ const Class = {
 
 	// If the content chunk is nil this function will automatically invoke close.
 	write: function(content) {
-		if (content != null) {
+		if (content != null && !this.closed) {
 			this.write_headers();
 			this.output(content);
 

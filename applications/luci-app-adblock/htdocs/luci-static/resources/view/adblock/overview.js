@@ -131,7 +131,7 @@ return view.extend({
 	},
 
 	render: function(result) {
-		var m, s, o;
+		let m, s, o;
 
 		m = new form.Map('adblock', 'Adblock', _('Configuration of the adblock package to block ad/abuse domains by using DNS. \
 			For further information <a href="https://github.com/openwrt/packages/blob/master/net/adblock/files/README.md" target="_blank" rel="noreferrer noopener" >check the online documentation</a>'));
@@ -180,9 +180,9 @@ return view.extend({
 				if (sources && info) {
 					for (var i = 0; i < info.active_sources.length; i++) {
 						if (i < info.active_sources.length-1) {
-							src_array += info.active_sources[i].source + ', ';
+							src_array += info.active_sources[i] + ', ';
 						} else {
-							src_array += info.active_sources[i].source
+							src_array += info.active_sources[i]
 						}
 					}
 					sources.textContent = src_array || '-';
@@ -311,7 +311,6 @@ return view.extend({
 
 		o = s.taboption('general', widgets.NetworkSelect, 'adb_trigger', _('Startup Trigger Interface'), _('List of available network interfaces to trigger the adblock start. \
 			Choose \'unspecified\' to use a classic startup timeout instead of a network trigger.'));
-		o.unspecified = true;
 		o.nocreate = true;
 		o.rmempty = true;
 
@@ -320,20 +319,22 @@ return view.extend({
 
 		o = s.taboption('general', widgets.ZoneSelect, 'adb_zonelist', _('Forced Zones'), _('Firewall source zones that should be forced locally.'));
 		o.depends('adb_forcedns', '1');
-		o.unspecified = true;
 		o.multiple = true;
 		o.nocreate = true;
 		o.rmempty = true;
 
 		o = s.taboption('general', form.DynamicList, 'adb_portlist', _('Forced Ports'), _('Firewall ports that should be forced locally.'));
 		o.depends('adb_forcedns', '1');
-		o.unspecified = true;
 		o.multiple = true;
 		o.nocreate = false;
 		o.datatype = 'port';
 		o.value('53');
 		o.value('853');
 		o.value('5353');
+		o.rmempty = true;
+
+		o = s.taboption('general', form.Flag, 'adb_tld', _('TLD Compression'), _('The top level domain compression removes thousands of needless host entries from the final DNS blocklist.'));
+		o.default = 1
 		o.rmempty = true;
 
 		o = s.taboption('general', form.Flag, 'adb_safesearch', _('Enable SafeSearch'), _('Enforcing SafeSearch for google, bing, duckduckgo, yandex, youtube and pixabay.'));
@@ -484,7 +485,6 @@ return view.extend({
 		o.default = '<em><b>Changes on this tab needs a full adblock service restart to take effect.</b></em>';
 
 		o = s.taboption('adv_report', widgets.DeviceSelect, 'adb_repiface', _('Report Interface'), _('List of available network devices used by tcpdump.'));
-		o.unspecified = true;
 		o.nocreate = false;
 		o.rmempty = true;
 
@@ -583,12 +583,12 @@ return view.extend({
 
 		o = s.taboption('sources', form.DummyValue, '_sub');
 		o.rawhtml = true;
-		o.default = '<em><b>Energized List Selection</b></em>';
+		o.default = '<em><b>StevenBlack List Selection</b></em>';
 
-		o = s.taboption('sources', form.DynamicList, 'adb_eng_sources', _('Variants'));
+		o = s.taboption('sources', form.DynamicList, 'adb_stb_sources', _('Variants'));
 		for (var i = 0; i < categories.length; i++) {
 			code = categories[i].match(/^(\w+);/)[1].trim();
-			if (code === 'eng') {
+			if (code === 'stb') {
 				list = categories[i].match(/^\w+;(.*);/)[1].trim();
 				path = categories[i].match(/^.*;(.*$)/)[1].trim();
 				o.value(path, list);
@@ -599,12 +599,28 @@ return view.extend({
 
 		o = s.taboption('sources', form.DummyValue, '_sub');
 		o.rawhtml = true;
-		o.default = '<em><b>StevenBlack List Selection</b></em>';
+		o.default = '<em><b>Hagezi List Selection</b></em>';
 
-		o = s.taboption('sources', form.DynamicList, 'adb_stb_sources', _('Variants'));
+		o = s.taboption('sources', form.DynamicList, 'adb_hag_sources', _('Variants'));
 		for (var i = 0; i < categories.length; i++) {
 			code = categories[i].match(/^(\w+);/)[1].trim();
-			if (code === 'stb') {
+			if (code === 'hag') {
+				list = categories[i].match(/^\w+;(.*);/)[1].trim();
+				path = categories[i].match(/^.*;(.*$)/)[1].trim();
+				o.value(path, list);
+			}
+		}
+		o.optional = true;
+		o.rmempty = true;
+
+		o = s.taboption('sources', form.DummyValue, '_sub');
+		o.rawhtml = true;
+		o.default = '<em><b>1Hosts List Selection</b></em>';
+
+		o = s.taboption('sources', form.DynamicList, 'adb_hst_sources', _('Variants'));
+		for (var i = 0; i < categories.length; i++) {
+			code = categories[i].match(/^(\w+);/)[1].trim();
+			if (code === 'hst') {
 				list = categories[i].match(/^\w+;(.*);/)[1].trim();
 				path = categories[i].match(/^.*;(.*$)/)[1].trim();
 				o.value(path, list);

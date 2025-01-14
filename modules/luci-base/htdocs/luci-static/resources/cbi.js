@@ -370,12 +370,7 @@ function cbi_validate_form(form, errmsg)
 function cbi_validate_named_section_add(input)
 {
 	var button = input.parentNode.parentNode.querySelector('.cbi-button-add');
-	if (input.value !== '') {
-		button.disabled = false;
-	}
-	else {
-		button.disabled = true;
-	}
+	button.disabled = input.value === '';
 }
 
 function cbi_validate_reset(form)
@@ -738,18 +733,6 @@ function matchesElem(node, selector) { return L.dom.matches(node, selector) }
 function findParent(node, selector) { return L.dom.parent(node, selector) }
 function E() { return L.dom.create.apply(L.dom, arguments) }
 
-if (typeof(window.CustomEvent) !== 'function') {
-	function CustomEvent(event, params) {
-		params = params || { bubbles: false, cancelable: false, detail: undefined };
-		var evt = document.createEvent('CustomEvent');
-		    evt.initCustomEvent( event, params.bubbles, params.cancelable, params.detail );
-		return evt;
-	}
-
-	CustomEvent.prototype = window.Event.prototype;
-	window.CustomEvent = CustomEvent;
-}
-
 function cbi_dropdown_init(sb) {
 	if (sb && L.dom.findClassInstance(sb) instanceof L.ui.Dropdown)
 		return;
@@ -796,5 +779,7 @@ document.addEventListener('DOMContentLoaded', function() {
 			L.hideTooltip(ev);
 	});
 
-	document.querySelectorAll('.table').forEach(cbi_update_table);
+	L.require('ui').then(function(ui) {
+		document.querySelectorAll('.table').forEach(cbi_update_table);
+	});
 });

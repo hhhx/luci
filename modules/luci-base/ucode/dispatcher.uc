@@ -52,7 +52,7 @@ function error500(msg, ex) {
 	}
 	catch {
 		http.write('<!--]]>--><!--\'>--><!--">-->\n');
-		http.write(`<p>${trim(ex)}</p>\n`);
+		http.write(`<p>${trim(msg)}</p>\n`);
 
 		if (ex) {
 			http.write(`<p>${trim(ex.message)}</p>\n`);
@@ -395,7 +395,7 @@ function build_pagetree() {
 						}
 
 						node.children ??= {};
-						node.children[s[0]] ??= {};
+						node.children[s[0]] ??= { satisfied: true };
 						node = node.children[s[0]];
 					}
 
@@ -582,7 +582,7 @@ function resolve_firstchild(node, session, login_allowed, ctx) {
 			session = is_authenticated(node.auth);
 
 		let cacl = child.depends?.acl;
-		let login = login_allowed || child.auth?.login;
+		let login = !session && (login_allowed || child.auth?.login);
 
 		if (login || check_acl_depends(cacl, session?.acls?.["access-group"]) != null) {
 			if (child.title && type(child.action) == "object") {
@@ -764,10 +764,22 @@ function rollback_pending() {
 
 let dispatch;
 
+function render_action(fn) {
+	const data = render(fn);
+
+	http.write_headers();
+	http.output(data);
+}
+
 function run_action(request_path, lang, tree, resolved, action) {
-	switch (action?.type) {
+	switch ((type(action) == 'object') ? action.type : 'none') {
 	case 'template':
-		runtime.render(action.path, {});
+		if (runtime.is_ucode_template(action.path))
+			runtime.render(action.path, {});
+		else
+			render_action(() => {
+				runtime.call('luci.dispatcher', 'render_lua_template', action.path);
+			});
 		break;
 
 	case 'view':
@@ -775,12 +787,12 @@ function run_action(request_path, lang, tree, resolved, action) {
 		break;
 
 	case 'call':
-		http.write(render(() => {
+		render_action(() => {
 			runtime.call(action.module, action.function,
 				...(action.parameters ?? []),
 				...resolved.ctx.request_args
 			);
-		}));
+		});
 		break;
 
 	case 'function':
@@ -789,30 +801,30 @@ function run_action(request_path, lang, tree, resolved, action) {
 		assert(type(mod[action.function]) == 'function',
 			`Module '${action.module}' does not export function '${action.function}'`);
 
-		http.write(render(() => {
+		render_action(() => {
 			call(mod[action.function], mod, runtime.env,
 				...(action.parameters ?? []),
 				...resolved.ctx.request_args
 			);
-		}));
+		});
 		break;
 
 	case 'cbi':
-		http.write(render(() => {
+		render_action(() => {
 			runtime.call('luci.dispatcher', 'invoke_cbi_action',
 				action.path, null,
 				...resolved.ctx.request_args
 			);
-		}));
+		});
 		break;
 
 	case 'form':
-		http.write(render(() => {
+		render_action(() => {
 			runtime.call('luci.dispatcher', 'invoke_form_action',
 				action.path,
 				...resolved.ctx.request_args
 			);
-		}));
+		});
 		break;
 
 	case 'alias':
@@ -828,14 +840,19 @@ function run_action(request_path, lang, tree, resolved, action) {
 		break;
 
 	case 'firstchild':
-		if (!length(tree.children))
+		if (!length(tree.children)) {
 			error404("No root node was registered, this usually happens if no module was installed.\n" +
 			         "Install luci-mod-admin-full and retry. " +
 			         "If the module is already installed, try removing the /tmp/luci-indexcache file.");
-		else
-			error404(`No page is registered at '/${join("/", resolved.ctx.request_path)}'.\n` +
-			         "If this url belongs to an extension, make sure it is properly installed.\n" +
-			         "If the extension was recently installed, try removing the /tmp/luci-indexcache file.");
+			break;
+		}
+
+		/* fall through */
+
+	case 'none':
+		error404(`No page is registered at '/${entityencode(join("/", resolved.ctx.request_path))}'.\n` +
+		         "If this url belongs to an extension, make sure it is properly installed.\n" +
+		         "If the extension was recently installed, try removing the /tmp/luci-indexcache file.");
 		break;
 
 	default:
@@ -849,7 +866,7 @@ dispatch = function(_http, path) {
 	let version = determine_version();
 	let lang = determine_request_language();
 
-	runtime = LuCIRuntime({
+	runtime = runtime || LuCIRuntime({
 		http,
 		ubus,
 		uci,
@@ -874,18 +891,19 @@ dispatch = function(_http, path) {
 		striptags,
 		entityencode,
 		_: (...args) => translate(...args) ?? args[0],
-		N_: (...args) => ntranslate(...args) ?? (n[0] == 1 ? n[1] : n[2]),
+		N_: (...args) => ntranslate(...args) ?? (args[0] == 1 ? args[1] : args[2]),
 	});
 
 	try {
 		let menu = menu_json();
 
-		path ??= map(match(http.getenv('PATH_INFO'), /[^\/]+/g), m => m[0]);
+		path ??= map(match(http.getenv('PATH_INFO'), /[^\/]+/g), m => urldecode(m[0]));
 
 		let resolved = resolve_page(menu, path);
 
 		runtime.env.ctx = resolved.ctx;
-		runtime.env.node = resolved.node;
+		runtime.env.dispatched = resolved.node;
+		runtime.env.requested ??= resolved.node;
 
 		if (length(resolved.ctx.auth)) {
 			let session = is_authenticated(resolved.ctx.auth);
@@ -909,15 +927,18 @@ dispatch = function(_http, path) {
 					http.header('X-LuCI-Login-Required', 'yes');
 
 					let scope = { duser: 'root', fuser: user };
+					let theme_sysauth = `themes/${basename(runtime.env.media)}/sysauth`;
 
-					try {
-						runtime.render(`themes/${basename(runtime.env.media)}/sysauth`, scope);
-					}
-					catch (e) {
-						runtime.render('sysauth', scope);
+					if (runtime.is_ucode_template(theme_sysauth) || runtime.is_lua_template(theme_sysauth)) {
+						try {
+							return runtime.render(theme_sysauth, scope);
+						}
+						catch (e) {
+							runtime.env.media_error = `${e}`;
+						}
 					}
 
-					return;
+					return runtime.render('sysauth', scope);
 				}
 
 				let cookie_name = (http.getenv('HTTPS') == 'on') ? 'sysauth_https' : 'sysauth_http',

@@ -48,8 +48,10 @@ const Class = {
 			let bridge = this.env.dispatcher.load_luabridge(optional);
 
 			if (bridge) {
+				let http = this.env.http;
+
 				this.L = bridge.create();
-				this.L.set('L', proto({ write: print }, this.env));
+				this.L.set('L', proto({ write: (...args) => http.closed || print(...args) }, this.env));
 				this.L.invoke('require', 'luci.ucodebridge');
 
 				this.env.lua_active = true;
@@ -59,9 +61,23 @@ const Class = {
 		return this.L;
 	},
 
+	is_ucode_template: function(path) {
+		return access(`${template_directory}/${path}.ut`);
+	},
+
+	is_lua_template: function(path) {
+		let vm = this.init_lua(true);
+
+		return vm && access(`${vm.get('_G', 'luci', 'template', 'viewdir')}/${path}.htm`);
+	},
+
 	render_ucode: function(path, scope) {
 		let tmplfunc = loadfile(path, { raw_mode: false });
-		call(tmplfunc, null, scope ?? {});
+
+		if (this.env.http.closed)
+			render(call, tmplfunc, null, scope ?? {});
+		else
+			call(tmplfunc, null, scope ?? {});
 	},
 
 	render_lua: function(path, scope) {
@@ -157,7 +173,7 @@ export default function(env) {
 		}
 
 		if (!media)
-			error500(`Unable to render any theme header template, last error was:\n${status}`);
+			env.dispatcher.error500(`Unable to render any theme header template, last error was:\n${status}`);
 	}
 
 	self.env.media = media;

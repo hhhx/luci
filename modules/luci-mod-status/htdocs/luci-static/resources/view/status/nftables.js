@@ -4,13 +4,12 @@
 'require fs';
 'require ui';
 'require dom';
-'require tools.firewall as fwtool';
 
 var expr_translations = {
 	'meta.iifname': _('Ingress device name', 'nft meta iifname'),
 	'meta.oifname': _('Egress device name', 'nft meta oifname'),
 	'meta.iif': _('Ingress device id', 'nft meta iif'),
-	'meta.iif': _('Egress device id', 'nft meta oif'),
+	'meta.oif': _('Egress device id', 'nft meta oif'),
 
 	'meta.l4proto': _('IP protocol', 'nft meta l4proto'),
 	'meta.l4proto.tcp': 'TCP',
@@ -25,6 +24,7 @@ var expr_translations = {
 
 	'meta.mark': _('Packet mark', 'nft meta mark'),
 
+	'meta.time': _('Packet receive time', 'nft meta time'),
 	'meta.hour': _('Current time', 'nft meta hour'),
 	'meta.day': _('Current weekday', 'nft meta day'),
 
@@ -93,8 +93,10 @@ var op_translations = {
 
 var action_translations = {
 	'accept': _('Accept packet', 'nft accept action'),
+	'notrack': _('Do not track', 'nft notrack action'),
 	'drop': _('Drop packet', 'nft drop action'),
 	'jump': _('Continue in <strong><a href="#%q.%q">%h</a></strong>', 'nft jump action'),
+	'log': _('Log event "<strong>%h</strong>…"', 'nft log action'),
 
 	'reject.tcp reset': _('Reject packet with <strong>TCP reset</strong>', 'nft reject with tcp reset'),
 	'reject.icmp': _('Reject IPv4 packet with <strong>ICMP type %h</strong>', 'nft reject with icmp type'),
@@ -144,6 +146,7 @@ return view.extend({
 			if (expr.hasOwnProperty(k)) {
 				switch (k) {
 				case 'accept':
+				case 'notrack':
 				case 'reject':
 				case 'drop':
 				case 'jump':
@@ -154,6 +157,7 @@ return view.extend({
 				case 'masquerade':
 				case 'return':
 				case 'flow':
+				case 'log':
 					return true;
 				}
 			}
@@ -355,11 +359,11 @@ return view.extend({
 			var k = 'reject.%s'.format(spec.type);
 
 			return E('span', {
-				'class': 'ifacebadge',
-				'data-tooltip': JSON.stringify(spec)
+				'class': 'ifacebadge'
 			}, (action_translations[k] || k).format(this.exprToString(spec.expr)));
 
 		case 'accept':
+		case 'notrack':
 		case 'drop':
 			return E('span', {
 				'class': 'ifacebadge'
@@ -445,6 +449,11 @@ return view.extend({
 				'class': 'ifacebadge'
 			}, action_translations.flow.format(spec.flowtable.replace(/^@/, '')));
 
+		case 'log':
+			return E('span', {
+				'class': 'ifacebadge'
+			}, action_translations.log.format(spec.prefix));
+
 		default:
 			return E('span', {
 				'class': 'ifacebadge',
@@ -509,7 +518,7 @@ return view.extend({
 		}
 
 		if (empty)
-			dom.content(row.childNodes[0], E('em', [ _('Any packet', 'nft match any traffic') ]));
+			dom.append(row.childNodes[0], E('span', { 'class': 'ifacebadge' }, '<em>%h</em>'.format(_('Any packet', 'nft match any traffic'))));
 
 		return row;
 	},

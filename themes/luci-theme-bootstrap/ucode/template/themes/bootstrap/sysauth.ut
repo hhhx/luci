@@ -33,12 +33,12 @@
 	</div>
 	{% endif %}
 
-	<button class="btn cbi-button-positive important">{{ _('Login') }}</button>
+	<button class="btn cbi-button-positive important">{{ _('Log in') }}</button>
 </section>
 
 <div id="view">
 	<div class="spinning">{{ _('Loading view…') }}</div>
-	<script type="text/javascript">
+	<script>
 		L.require('ui').then(function(ui) {
 			ui.instantiateView('bootstrap.sysauth');
 		});

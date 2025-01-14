@@ -23,8 +23,10 @@ function ubus_reply(id, data, code, errmsg) {
 		reply.error = { code, message: errmsg };
 	else if (type(code) == 'object')
 		reply.result = code;
-	else
+	else if (data != null)
 		reply.result = [ code, data ];
+	else
+		reply.result = [ code ];
 
 	return reply;
 }
@@ -141,8 +143,8 @@ return {
 
 			if (http.getenv('HTTPS') == 'on')
 				http.header('Set-Cookie', `sysauth_https=; expires=Thu, 01 Jan 1970 01:00:00 GMT; path=${url}`);
-
-			http.header('Set-Cookie', `sysauth_http=; expires=Thu, 01 Jan 1970 01:00:00 GMT; path=${url}`);
+			else
+				http.header('Set-Cookie', `sysauth_http=; expires=Thu, 01 Jan 1970 01:00:00 GMT; path=${url}`);
 		}
 
 		http.redirect(url);
